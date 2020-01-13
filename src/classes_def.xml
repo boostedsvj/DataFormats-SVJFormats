@@ -1,0 +1,5 @@
+<lcgdict>
+<class name="SubstructurePack"/>
+<class name="std::vector<SubstructurePack>"/>
+<class name="edm::Wrapper<std::vector<SubstructurePack> >"/>
+</lcgdict>
