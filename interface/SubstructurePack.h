@@ -9,37 +9,39 @@
 
 class SubstructurePack {
     public:
+        typedef edm::Ptr<reco::GenJet> GenJetPtr;
+        typedef edm::Ptr<reco::BasicJet> BasicJetPtr;
+        typedef edm::Ptr<reco::GenParticle> GenParticlePtr;
+
         // Constructor & destructor (default needed)
         inline SubstructurePack() {}
-        inline SubstructurePack(const reco::GenJet * fGenJet) {
-            genJet_ = fGenJet;
-            }
+        inline SubstructurePack(const GenJetPtr fGenJet) {genJet_ = *fGenJet;}
         virtual ~SubstructurePack() {};
 
         // Getters
-        const reco::GenJet * jet() const { return genJet_; }
-        const reco::BasicJet * substructurejet() const { return substructurejet_; }
-        std::vector<edm::Ptr<reco::GenJet>> subjets() const { return subjets_; }
-        int nSubjets() const { return subjets_.size(); }
-        bool hasZprime() const { return hasZprime_ ;}
-        const reco::GenParticle * zprime() const { return zprime_ ;}
+        const reco::GenJet *         jet()             const { return &genJet_; }
+        const reco::BasicJet *       substructurejet() const { return &substructurejet_; }
+        const reco::GenParticle *    zprime()          const { return &zprime_ ;}
+        std::vector<GenJetPtr> subjets()         const { return subjets_; }
+        int                    nSubjets()        const { return subjets_.size(); }
+        bool                   hasZprime()       const { return hasZprime_ ;}
 
         // Setters
 
-        void addZprime( const reco::GenParticle * fZprime ) {
-            zprime_ = fZprime ;
+        void addZprime( const GenParticlePtr fZprime ) {
+            zprime_ = *fZprime ;
             hasZprime_ = true ;
             }
 
-        void addSubstructure(const reco::BasicJet * fSubstructureJet){
-            substructurejet_ = fSubstructureJet;
+        void addSubstructure(const BasicJetPtr fSubstructureJet){
+            substructurejet_ = *fSubstructureJet;
             // The daughters of substructurejet_ will be the actual subjets
-            for ( auto const & subjet : substructurejet_->daughterPtrVector()) {
+            for ( auto const & subjet : substructurejet_.daughterPtrVector()) {
                 addSubjet( edm::Ptr<reco::GenJet>(subjet) ) ;
                 }
             }
 
-        void addSubjet( edm::Ptr<reco::GenJet> fSubjet ) {
+        void addSubjet(GenJetPtr fSubjet) {
             // check that the subjet does not contain any extra constituents not contained in the jet
             // If subjetDaughter is not a daughter of the main jet, skip the whole subjet
             const std::vector<reco::CandidatePtr> & jetDaughters = jet()->daughterPtrVector();
@@ -76,16 +78,12 @@ class SubstructurePack {
             return _leftOverDaughters ;
             }
 
-
     private:
-        const reco::GenJet * genJet_;
-        const reco::GenParticle * zprime_;
+        reco::GenJet genJet_;
+        reco::GenParticle zprime_;
+        reco::BasicJet substructurejet_;
         bool hasZprime_ = false ;
         std::vector<edm::Ptr<reco::GenJet>> subjets_;
-
-        // reco::CandidatePtr substructurejet_;
-        // edm::Ptr<reco::BasicJet> substructurejet_;
-        const reco::BasicJet * substructurejet_;
     };
 
 typedef std::vector<SubstructurePack> SubstructurePackCollection;
