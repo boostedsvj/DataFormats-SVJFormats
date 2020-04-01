@@ -24,103 +24,138 @@ class GenParticlePlus : public reco::GenParticle {
             return particle;
             }
 
+        void printDecayTree() {
+            traverseDaughters(this, true);
+            }
+
         std::vector<const reco::Candidate *> traverseDaughters() {
             return traverseDaughters(this);
             }
 
-        std::vector<const reco::Candidate *> traverseDaughters(const reco::Candidate * node) {
+        std::vector<const reco::Candidate *> traverseDaughters(const reco::Candidate * node, bool verbose = false) {
             // Creates empty vector `returnable` which is subsequently returned
             std::vector<const reco::Candidate *> returnable;
-            traverseDaughtersInPlace(node, returnable);
+            traverseDaughtersInPlace(node, returnable, verbose);
             return returnable;
             }
 
         void traverseDaughtersInPlace(
             // Only modifies the `returnable` vector
             const reco::Candidate * node,
-            std::vector<const reco::Candidate *> & returnable
+            std::vector<const reco::Candidate *> & returnable,
+            bool verbose = false,
+            unsigned int depth = 0
             ){
-            returnable.push_back(node);
+            // Work on current node
+            if (verbose) {
+                // Only print, don't save node
+                std::string toprint;
+                // Add indentation
+                for(unsigned int i=0; i < depth; i++){toprint += "....";}
+                toprint += std::to_string(node->pdgId());
+                // edm::LogError("TreeTrav") << toprint;
+                std::cout << toprint << std::endl;
+                }
+            else {
+                // Save node in output vectors
+                returnable.push_back(node);
+                }
+            // Recursion
             if (node->numberOfDaughters() > 0){
                 for(unsigned int i=0; i < node->numberOfDaughters(); i++){
-                    traverseDaughtersInPlace(node->daughter(i), returnable);
+                    traverseDaughtersInPlace(node->daughter(i), returnable, verbose, depth+1);
                     }
                 }
+            }
+
+        void copyCandidateSetToGenParticleVector(
+            std::set<const reco::Candidate *> & candidateSet,
+            std::vector<reco::GenParticle> & particleVector
+            ){
+            for(auto const c : candidateSet) {
+                reco::GenParticle particle = toGenParticle(c);
+                particleVector.push_back(particle);
+                }
+            }
+
+        bool has4900101daughters(const reco::Candidate * darkQuark){
+            if (darkQuark->numberOfDaughters() == 0){ return false; }
+            for(unsigned int i=0; i < darkQuark->numberOfDaughters(); i++){
+                if (abs(darkQuark->daughter(i)->pdgId()) == 4900101){
+                    return true;
+                    }
+                }
+            return false;
+            }
+
+        bool isDarkMeson(const reco::Candidate * candidate){
+            int pdgid = abs(candidate->pdgId());
+            return bool( pdgid >= 4900111 && pdgid < 4901000 );
+            }
+
+        bool decaysDarkly(const reco::Candidate * candidate){
+            int pdgid = abs(candidate->daughter(0)->pdgId());
+            return bool( pdgid == 51 || pdgid == 52 || pdgid == 53 );
             }
 
         void setQuarksAndFinalProducts() {
             std::vector<const reco::Candidate *> daughters = traverseDaughters();
-
-            std::set<const reco::Candidate *> allFinalProductsDark;
-            std::set<const reco::Candidate *> allFinalProductsVisible;
-            std::set<const reco::Candidate *> darkQuarkSet;
+            // Categorize daughters of the Z' into sets
+            std::set<const reco::Candidate *> darkMesonDecayingDarkSet;
+            std::set<const reco::Candidate *> darkMesonDecayingVisibleSet;
+            std::set<const reco::Candidate *> initialDarkQuarkSet;
+            std::set<const reco::Candidate *> finalDarkQuarkSet;
+            std::set<const reco::Candidate *> finalVisibleProductSet;
             for(unsigned int i=0; i < daughters.size(); i++){
                 int pdgid = abs(daughters[i]->pdgId());
-                if (pdgid == 51 || pdgid == 52 || pdgid == 53){
-                    // The mothers of particles with pdgid 51-53 are the final dark particles
-                    allFinalProductsDark.insert(daughters[i]->mother());
+                const reco::Candidate * daughter = daughters[i];
+                // Deal with dark mesons
+                if (isDarkMeson(daughter)){
+                    if (decaysDarkly(daughter)){
+                        darkMesonDecayingDarkSet.insert(daughter);
+                        }
+                    else {
+                        darkMesonDecayingVisibleSet.insert(daughter);
+                        }
                     }
-                else if (pdgid == 4900101 && daughters[i]->mother()->pdgId() == 4900023){
-                    // Dark quarks (4900101) that have as mother the Z' are the initial dark quarks 
-                    darkQuarkSet.insert(daughters[i]);
+                // Deal with dark quarks
+                else if (pdgid == 4900101){
+                    if (daughter->mother()->pdgId() == 4900023){
+                        // Dark quarks (4900101) that have as mother the Z' are the initial dark quarks 
+                        initialDarkQuarkSet.insert(daughter);
+                        }
+                    else if (abs(daughter->mother()->pdgId()) == 4900101 && !has4900101daughters(daughter)){
+                        // Dark quarks (4900101) that have no dark quark daughters are the final dark quarks 
+                        finalDarkQuarkSet.insert(daughter);
+                        }
                     }
-                else if (pdgid < 4000000 && daughters[i]->status() == 1) {
-                    allFinalProductsVisible.insert(daughters[i]);
+                // Deal with final visible particles
+                else if (
+                    (pdgid < 4000000 || pdgid > 5000000)
+                    && !( pdgid==51 || pdgid==52 || pdgid==53 )
+                    && daughter->status() == 1)
+                    {
+                    finalVisibleProductSet.insert(daughter);
                     }
                 }
-
-            if (darkQuarkSet.size() != 2){
+            // Assert there are exactly two quarks initially
+            if (initialDarkQuarkSet.size() != 2) {
                 throw cms::Exception("NotTwoDarkQuarks")
-                    << "Found " << darkQuarkSet.size() << " dark quarks, but expected exactly 2\n";
+                    << "Found " << initialDarkQuarkSet.size() << " dark quarks, but expected exactly 2\n";
                 }
-
-            // Convert to vector
-            std::vector<const reco::Candidate *> darkQuarkCandidates(darkQuarkSet.begin(), darkQuarkSet.end());
-
-            // Add to class variable
-            for(auto const c : darkQuarkCandidates) {
-                reco::GenParticle darkQuark = toGenParticle(c);
-                darkQuarks.push_back(darkQuark);
-                }
-
-            for(auto const c : allFinalProductsDark) {
-                const reco::Candidate * mother = c;
-                reco::GenParticle particle = toGenParticle(c);
-                while (mother->numberOfMothers() > 0){
-                    if (mother == darkQuarkCandidates[0]){
-                        finalDarkParticlesLeft.push_back(particle);
-                        break;
-                        }
-                    else if (mother == darkQuarkCandidates[1]){
-                        finalDarkParticlesRight.push_back(particle);
-                        break;
-                        }
-                    mother = mother->mother();
-                    }
-                }
-
-            for(auto const c : allFinalProductsVisible) {
-                const reco::Candidate * mother = c;
-                reco::GenParticle particle = toGenParticle(c);
-                while (mother->numberOfMothers() > 0){
-                    if (mother == darkQuarkCandidates[0]){
-                        finalVisibleParticlesLeft.push_back(particle);
-                        break;
-                        }
-                    else if (mother == darkQuarkCandidates[1]){
-                        finalVisibleParticlesRight.push_back(particle);
-                        break;
-                        }
-                    mother = mother->mother();
-                    }
-                }
+            // Copy sets into the class vectors as GenParticles
+            copyCandidateSetToGenParticleVector(darkMesonDecayingDarkSet, darkMesonDecayingDark);
+            copyCandidateSetToGenParticleVector(darkMesonDecayingVisibleSet, darkMesonDecayingVisible);
+            copyCandidateSetToGenParticleVector(initialDarkQuarkSet, initialDarkQuark);
+            copyCandidateSetToGenParticleVector(finalDarkQuarkSet, finalDarkQuark);
+            copyCandidateSetToGenParticleVector(finalVisibleProductSet, finalVisibleProduct);
             }
 
-        std::vector<reco::GenParticle> darkQuarks;
-        std::vector<reco::GenParticle> finalDarkParticlesLeft;
-        std::vector<reco::GenParticle> finalDarkParticlesRight;
-        std::vector<reco::GenParticle> finalVisibleParticlesLeft;
-        std::vector<reco::GenParticle> finalVisibleParticlesRight;
+        std::vector<reco::GenParticle> darkMesonDecayingDark;
+        std::vector<reco::GenParticle> darkMesonDecayingVisible;
+        std::vector<reco::GenParticle> initialDarkQuark;
+        std::vector<reco::GenParticle> finalDarkQuark;
+        std::vector<reco::GenParticle> finalVisibleProduct;
     };
 
 typedef std::vector<GenParticlePlus> GenParticlePlusCollection;
