@@ -2,4 +2,7 @@
 <class name="SubstructurePack"/>
 <class name="std::vector<SubstructurePack>"/>
 <class name="edm::Wrapper<std::vector<SubstructurePack> >"/>
+<class name="GenParticlePlus"/>
+<class name="std::vector<GenParticlePlus>"/>
+<class name="edm::Wrapper<std::vector<GenParticlePlus> >"/>
 </lcgdict>
