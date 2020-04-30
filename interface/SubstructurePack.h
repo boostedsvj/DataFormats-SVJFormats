@@ -6,6 +6,7 @@
 #include "DataFormats/JetReco/interface/BasicJet.h"
 #include "DataFormats/HepMCCandidate/interface/GenParticle.h"
 #include "DataFormats/Candidate/interface/CandidateFwd.h"
+ #include <TLorentzVector.h>
 
 class SubstructurePack {
     public:
@@ -19,12 +20,13 @@ class SubstructurePack {
         virtual ~SubstructurePack() {};
 
         // Getters
-        const reco::GenJet *         jet()             const { return &genJet_; }
-        const reco::BasicJet *       substructurejet() const { return &substructurejet_; }
-        const reco::GenParticle *    zprime()          const { return &zprime_ ;}
-        std::vector<GenJetPtr> subjets()         const { return subjets_; }
-        int                    nSubjets()        const { return subjets_.size(); }
-        bool                   hasZprime()       const { return hasZprime_ ;}
+        const reco::GenJet *      jet()             const { return &genJet_; }
+        const reco::BasicJet *    substructurejet() const { return &substructurejet_; }
+        const reco::GenParticle * zprime()          const { return &zprime_ ;}
+        std::vector<GenJetPtr>    subjets()         const { return subjets_; }
+        int                       nSubjets()        const { return subjets_.size(); }
+        bool                      hasZprime()       const { return hasZprime_ ;}
+        TLorentzVector            summedsubjets()   const { return summedsubjets_ ;}
 
         // Setters
 
@@ -38,6 +40,11 @@ class SubstructurePack {
             // The daughters of substructurejet_ will be the actual subjets
             for ( auto const & subjet : substructurejet_.daughterPtrVector()) {
                 addSubjet( edm::Ptr<reco::GenJet>(subjet) ) ;
+                }
+            // Also calculate the summed subjets
+            summedsubjets_ = TLorentzVector(0., 0., 0., 0.);
+            for ( auto const & subjet : subjets_) {
+                summedsubjets_ += TLorentzVector(subjet->px(), subjet->py(), subjet->pz(), subjet->energy());
                 }
             }
 
@@ -84,6 +91,7 @@ class SubstructurePack {
         reco::BasicJet substructurejet_;
         bool hasZprime_ = false ;
         std::vector<edm::Ptr<reco::GenJet>> subjets_;
+        TLorentzVector summedsubjets_;
     };
 
 typedef std::vector<SubstructurePack> SubstructurePackCollection;
